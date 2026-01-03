@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>트레이딩 캘린더 & 체크리스트</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        /* Notion Style Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+        
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Calendar Grid Style */
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 4px;
+        }
+        .calendar-day {
+            aspect-ratio: 1;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .calendar-day:hover { background-color: #E3E2E0; }
+        
+        /* Notion Colors */
+        .bg-notion-bg { background-color: #FFFFFF; } /* White for embed clarity */
+        .text-notion-black { color: #37352F; }
+        .border-notion { border-color: #E3E2E0; }
+    </style>
+</head>
+<body class="bg-white text-[#37352F] h-screen flex flex-col overflow-hidden">
+
+    <!-- App State Container -->
+    <div id="app" class="flex flex-col h-full max-w-5xl mx-auto w-full">
+        
+        <!-- Header / Navigation -->
+        <header class="flex-none p-4 border-b border-notion flex justify-between items-center bg-white z-10">
+            <div class="flex items-center gap-2">
+                <button id="back-btn" class="hidden px-3 py-1 text-sm rounded hover:bg-gray-100 flex items-center gap-1 transition-colors" onclick="showCalendar()">
+                    <span>←</span> 달력으로
+                </button>
+                <h1 id="header-title" class="text-xl font-bold">📅 트레이딩 로그</h1>
+            </div>
+            <div id="clock-display" class="text-sm text-gray-400 font-mono"></div>
+        </header>
+
+        <!-- Main Content Area -->
+        <main class="flex-grow overflow-auto p-4 relative">
+            
+            <!-- VIEW 1: CALENDAR -->
+            <div id="calendar-view" class="fade-in h-full flex flex-col">
+                <div class="flex justify-between items-center mb-4">
+                    <button onclick="changeMonth(-1)" class="p-2 rounded hover:bg-gray-100">◀</button>
+                    <h2 id="current-month-year" class="text-lg font-semibold select-none"></h2>
+                    <button onclick="changeMonth(1)" class="p-2 rounded hover:bg-gray-100">▶</button>
+                </div>
+                
+                <div class="grid grid-cols-7 gap-1 mb-2 text-center text-xs text-gray-400 font-medium">
+                    <div class="text-red-400">일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div class="text-blue-400">토</div>
+                </div>
+                
+                <div id="calendar-days" class="calendar-grid flex-grow auto-rows-fr">
+                    <!-- Days injected by JS -->
+                </div>
+            </div>
+
+            <!-- VIEW 2: DAILY CHECKLIST -->
+            <div id="checklist-view" class="hidden fade-in space-y-6 pb-10">
+                <!-- Intro Card -->
+                <div class="bg-gray-50 rounded-lg p-5 border border-notion">
+                    <div class="flex justify-between items-center mb-2">
+                        <h2 class="text-lg font-semibold" id="selected-date-display">DATE</h2>
+                        <span id="day-grade" class="text-xs font-bold px-2 py-1 rounded bg-gray-200 text-gray-600">준비 중</span>
+                    </div>
+                    
+                    <!-- Progress Bar -->
+                    <div class="w-full bg-gray-200 rounded-full h-2.5 mb-2">
+                        <div id="daily-progress-bar" class="bg-blue-600 h-2.5 rounded-full transition-all duration-500" style="width: 0%"></div>
+                    </div>
+                    <p id="progress-text" class="text-xs text-right text-gray-500">0% 완료</p>
+                </div>
+
+                <!-- Checklist Items -->
+                <div class="space-y-3" id="task-list">
+                    <!-- 1. Wake Up -->
+                    <div class="task-card bg-white border border-notion rounded-md p-4 flex items-start justify-between shadow-sm hover:shadow-md transition-shadow">
+                        <div>
+                            <span class="text-xs font-bold text-indigo-500 bg-indigo-50 px-1 rounded">06:45</span>
+                            <h3 class="font-medium mt-1">기상 및 운동</h3>
+                            <p class="text-xs text-gray-500">뇌 깨우기, 신체 활성화</p>
+                        </div>
+                        <input type="checkbox" class="w-6 h-6 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer task-cb" data-task="wakeup">
+                    </div>
+
+                    <!-- 2. Market Analysis -->
+                    <div class="task-card bg-white border border-notion rounded-md p-4 shadow-sm hover:shadow-md transition-shadow">
+                        <div class="flex items-start justify-between mb-2">
+                            <div>
+                                <span class="text-xs font-bold text-blue-500 bg-blue-50 px-1 rounded">08:00</span>
+                                <h3 class="font-medium mt-1">마켓 분석</h3>
+                                <p class="text-xs text-gray-500">지지/저항 확인, 뉴스 체크</p>
+                            </div>
+                            <input type="checkbox" class="w-6 h-6 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer task-cb" data-task="analysis">
+                        </div>
+                        <textarea id="note-analysis" class="w-full text-sm bg-gray-50 p-2 rounded border border-gray-200 resize-none h-16" placeholder="주요 관점 메모..."></textarea>
+                    </div>
+
+                    <!-- 3. One Trade -->
+                    <div class="task-card bg-white border border-notion rounded-md p-4 shadow-sm hover:shadow-md transition-shadow">
+                        <div class="flex items-start justify-between mb-2">
+                            <div>
+                                <span class="text-xs font-bold text-amber-500 bg-amber-50 px-1 rounded">08:30</span>
+                                <h3 class="font-medium mt-1">프리마켓 트레이드 (1회)</h3>
+                                <p class="text-xs text-gray-500">원칙 진입, 결과 기록</p>
+                            </div>
+                            <input type="checkbox" class="w-6 h-6 rounded border-gray-300 text-amber-600 focus:ring-amber-500 cursor-pointer task-cb" data-task="trade">
+                        </div>
+                        <div class="flex gap-2">
+                            <button class="trade-result-btn px-3 py-1 text-xs border rounded hover:bg-green-50 text-gray-500" data-val="win">익절 💰</button>
+                            <button class="trade-result-btn px-3 py-1 text-xs border rounded hover:bg-red-50 text-gray-500" data-val="loss">손절 📉</button>
+                            <button class="trade-result-btn px-3 py-1 text-xs border rounded hover:bg-gray-100 text-gray-500" data-val="no_trade">매매 없음 🚫</button>
+                        </div>
+                    </div>
+
+                    <!-- 4. Cleaning -->
+                    <div class="task-card bg-white border border-notion rounded-md p-4 flex items-start justify-between shadow-sm hover:shadow-md transition-shadow">
+                        <div>
+                            <span class="text-xs font-bold text-teal-500 bg-teal-50 px-1 rounded">09:00</span>
+                            <h3 class="font-medium mt-1">방 청소 & 멘탈 리셋</h3>
+                            <p class="text-xs text-gray-500">환경 정리 후 차분함 유지</p>
+                        </div>
+                        <input type="checkbox" class="w-6 h-6 rounded border-gray-300 text-teal-600 focus:ring-teal-500 cursor-pointer task-cb" data-task="cleaning">
+                    </div>
+
+                    <!-- 5. Market Open & CLC -->
+                    <div class="task-card bg-white border border-notion rounded-md p-4 flex items-start justify-between shadow-sm hover:shadow-md transition-shadow">
+                        <div>
+                            <span class="text-xs font-bold text-red-500 bg-red-50 px-1 rounded">09:30</span>
+                            <h3 class="font-medium mt-1">본장 시작 & CLC 룰 확인</h3>
+                            <p class="text-xs text-gray-500">손익비, 셋업, 손실한도 체크</p>
+                        </div>
+                        <input type="checkbox" class="w-6 h-6 rounded border-gray-300 text-red-600 focus:ring-red-500 cursor-pointer task-cb" data-task="clc">
+                    </div>
+
+                    <!-- Daily Journal -->
+                    <div class="bg-white border border-notion rounded-md p-4 shadow-sm mt-4">
+                        <h3 class="font-medium mb-2 text-sm">📝 트레이딩 저널</h3>
+                        <textarea id="note-journal" class="w-full text-sm bg-gray-50 p-3 rounded border border-gray-200 resize-none h-24 focus:ring-2 focus:ring-gray-200 outline-none" placeholder="오늘의 교훈이나 감정을 기록하세요..."></textarea>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <script>
+        // --- DATA & STATE ---
+        const DB_KEY = 'trading_checklist_db_v1';
+        let currentDate = new Date();
+        let selectedDateKey = null; // YYYY-MM-DD
+        let db = JSON.parse(localStorage.getItem(DB_KEY)) || {};
+
+        const tasksList = ['wakeup', 'analysis', 'trade', 'cleaning', 'clc'];
+
+        // --- HELPER FUNCTIONS ---
+        function saveDB() {
+            localStorage.setItem(DB_KEY, JSON.stringify(db));
+            renderCalendar(); // Update calendar dots
+        }
+
+        function getDateKey(date) {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
+        function getTodayKey() {
+            return getDateKey(new Date());
+        }
+
+        // --- CALENDAR LOGIC ---
+        function renderCalendar() {
+            const year = currentDate.getFullYear();
+            const month = currentDate.getMonth();
+            
+            // Header Update
+            document.getElementById('current-month-year').innerText = `${year}년 ${month + 1}월`;
+
+            const firstDay = new Date(year, month, 1).getDay();
+            const lastDate = new Date(year, month + 1, 0).getDate();
+            
+            const grid = document.getElementById('calendar-days');
+            grid.innerHTML = '';
+
+            // Empty slots for previous month
+            for (let i = 0; i < firstDay; i++) {
+                const emptyCell = document.createElement('div');
+                grid.appendChild(emptyCell);
+            }
+
+            // Days
+            const todayKey = getTodayKey();
+
+            for (let d = 1; d <= lastDate; d++) {
+                const dateObj = new Date(year, month, d);
+                const dateKey = getDateKey(dateObj);
+                
+                const cell = document.createElement('div');
+                cell.className = 'calendar-day border border-gray-100 rounded p-1 flex flex-col items-center justify-start relative hover:shadow-sm';
+                
+                // Highlight Today
+                if (dateKey === todayKey) {
+                    cell.classList.add('bg-blue-50', 'border-blue-200');
+                }
+
+                // Date Number
+                const numSpan = document.createElement('span');
+                numSpan.className = 'text-sm font-medium ' + (dateKey === todayKey ? 'text-blue-600' : 'text-gray-700');
+                numSpan.innerText = d;
+                cell.appendChild(numSpan);
+
+                // Progress Indicator (Dot)
+                if (db[dateKey]) {
+                    const data = db[dateKey];
+                    const total = tasksList.length;
+                    let completed = 0;
+                    tasksList.forEach(t => { if(data[t]) completed++; });
+                    
+                    const dot = document.createElement('div');
+                    dot.className = 'w-2 h-2 rounded-full mt-1';
+                    
+                    if (completed === 0) {
+                        // Do nothing or gray
+                    } else if (completed === total) {
+                        dot.classList.add('bg-green-500'); // Perfect day
+                        cell.appendChild(dot);
+                    } else {
+                        dot.classList.add('bg-blue-400'); // In progress
+                        cell.appendChild(dot);
+                    }
+                }
+
+                cell.onclick = () => openChecklist(dateKey);
+                grid.appendChild(cell);
+            }
+        }
+
+        function changeMonth(delta) {
+            currentDate.setMonth(currentDate.getMonth() + delta);
+            renderCalendar();
+        }
+
+        // --- CHECKLIST LOGIC ---
+        function showCalendar() {
+            document.getElementById('checklist-view').classList.add('hidden');
+            document.getElementById('calendar-view').classList.remove('hidden');
+            document.getElementById('back-btn').classList.add('hidden');
+            document.getElementById('header-title').innerText = '📅 트레이딩 로그';
+            renderCalendar(); // Refresh visuals
+        }
+
+        function openChecklist(dateKey) {
+            selectedDateKey = dateKey;
+            
+            // View Switch
+            document.getElementById('calendar-view').classList.add('hidden');
+            document.getElementById('checklist-view').classList.remove('hidden');
+            document.getElementById('back-btn').classList.remove('hidden');
+            
+            // Set Header Date
+            const [y, m, d] = dateKey.split('-');
+            document.getElementById('selected-date-display').innerText = `${m}월 ${d}일 체크리스트`;
+            document.getElementById('header-title').innerText = `${y}.${m}.${d}`;
+
+            // Initialize DB entry if not exists
+            if (!db[dateKey]) {
+                db[dateKey] = {
+                    notes_analysis: '',
+                    notes_journal: '',
+                    trade_result: null // win, loss, no_trade
+                };
+                tasksList.forEach(t => db[dateKey][t] = false);
+            }
+
+            // Populate UI from DB
+            const data = db[dateKey];
+            
+            // Checkboxes
+            document.querySelectorAll('.task-cb').forEach(cb => {
+                const task = cb.getAttribute('data-task');
+                cb.checked = data[task] || false;
+            });
+
+            // Notes
+            document.getElementById('note-analysis').value = data.notes_analysis || '';
+            document.getElementById('note-journal').value = data.notes_journal || '';
+
+            // Trade Buttons
+            updateTradeButtons(data.trade_result);
+
+            updateDailyProgress();
+        }
+
+        function updateDailyProgress() {
+            if (!selectedDateKey) return;
+            
+            const data = db[selectedDateKey];
+            const total = tasksList.length;
+            let completed = 0;
+            tasksList.forEach(t => { if(data[t]) completed++; });
+
+            const pct = Math.round((completed / total) * 100);
+            
+            // Bar
+            const bar = document.getElementById('daily-progress-bar');
+            bar.style.width = `${pct}%`;
+            bar.className = `h-2.5 rounded-full transition-all duration-500 ${pct === 100 ? 'bg-green-500' : 'bg-blue-600'}`;
+            
+            // Text
+            document.getElementById('progress-text').innerText = `${pct}% 완료`;
+
+            // Grade Badge
+            const badge = document.getElementById('day-grade');
+            if (pct === 100) {
+                badge.innerText = "PERFECT 🎉";
+                badge.className = "text-xs font-bold px-2 py-1 rounded bg-green-100 text-green-700";
+            } else if (pct > 50) {
+                badge.innerText = "진행 중 🔥";
+                badge.className = "text-xs font-bold px-2 py-1 rounded bg-blue-100 text-blue-700";
+            } else {
+                badge.innerText = "시작 전";
+                badge.className = "text-xs font-bold px-2 py-1 rounded bg-gray-200 text-gray-600";
+            }
+        }
+
+        // --- EVENT LISTENERS ---
+        
+        // 1. Checkboxes
+        document.querySelectorAll('.task-cb').forEach(cb => {
+            cb.addEventListener('change', (e) => {
+                if (!selectedDateKey) return;
+                const task = e.target.getAttribute('data-task');
+                db[selectedDateKey][task] = e.target.checked;
+                saveDB();
+                updateDailyProgress();
+            });
+        });
+
+        // 2. Notes (Auto-save on input)
+        document.getElementById('note-analysis').addEventListener('input', (e) => {
+            if (!selectedDateKey) return;
+            db[selectedDateKey].notes_analysis = e.target.value;
+            saveDB();
+        });
+        document.getElementById('note-journal').addEventListener('input', (e) => {
+            if (!selectedDateKey) return;
+            db[selectedDateKey].notes_journal = e.target.value;
+            saveDB();
+        });
+
+        // 3. Trade Result Buttons
+        document.querySelectorAll('.trade-result-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                if (!selectedDateKey) return;
+                const val = e.target.getAttribute('data-val');
+                
+                // Toggle logic: if clicking same, clear it
+                if (db[selectedDateKey].trade_result === val) {
+                    db[selectedDateKey].trade_result = null;
+                } else {
+                    db[selectedDateKey].trade_result = val;
+                    // Auto-check trade task if result selected
+                    db[selectedDateKey]['trade'] = true;
+                    document.querySelector('.task-cb[data-task="trade"]').checked = true;
+                }
+                
+                saveDB();
+                updateTradeButtons(db[selectedDateKey].trade_result);
+                updateDailyProgress();
+            });
+        });
+
+        function updateTradeButtons(activeVal) {
+            document.querySelectorAll('.trade-result-btn').forEach(btn => {
+                const val = btn.getAttribute('data-val');
+                // Reset basic styles
+                btn.className = 'trade-result-btn px-3 py-1 text-xs border rounded transition-colors text-gray-500 hover:bg-gray-50';
+                
+                if (activeVal === val) {
+                    if(val === 'win') btn.className = 'trade-result-btn px-3 py-1 text-xs border rounded bg-green-100 text-green-700 border-green-500 font-bold';
+                    if(val === 'loss') btn.className = 'trade-result-btn px-3 py-1 text-xs border rounded bg-red-100 text-red-700 border-red-500 font-bold';
+                    if(val === 'no_trade') btn.className = 'trade-result-btn px-3 py-1 text-xs border rounded bg-gray-600 text-white border-gray-600 font-bold';
+                }
+            });
+        }
+
+        // Clock
+        setInterval(() => {
+            const now = new Date();
+            document.getElementById('clock-display').innerText = now.toLocaleTimeString('ko-KR', {hour12: false, hour:'2-digit', minute:'2-digit'});
+        }, 1000);
+
+        // Init
+        renderCalendar();
+
+    </script>
+</body>
+</html>
