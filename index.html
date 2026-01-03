@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>트레이딩 캘린더 (Cloud Sync)</title>
+    <title>트레이딩 캘린더 (Multi-Device Sync)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         /* Notion Style Scrollbar */
@@ -33,7 +33,7 @@
                 <button id="back-btn" class="hidden px-3 py-1 text-sm rounded hover:bg-gray-100 flex items-center gap-1 transition-colors" onclick="showCalendar()">
                     <span>←</span> 달력
                 </button>
-                <h1 id="header-title" class="text-xl font-bold">☁️ 트레이딩 로그</h1>
+                <h1 id="header-title" class="text-xl font-bold">☁️ 트레이딩 로그 (동기화됨)</h1>
                 <div id="sync-status" class="loader"></div>
             </div>
             <div id="clock-display" class="text-sm text-gray-400 font-mono"></div>
@@ -116,16 +116,15 @@
 
         // 🟢 사용자의 Firebase 설정이 적용되었습니다.
         let firebaseConfig;
-        let appId = 'default-app'; // 기본 App ID
+        let appId = 'default-app';
 
-        // 캔버스(미리보기) 환경과 실제 배포 환경을 구분합니다.
         if (typeof __firebase_config !== 'undefined') {
             firebaseConfig = JSON.parse(__firebase_config);
             if (typeof __app_id !== 'undefined') {
                 appId = __app_id;
             }
         } else {
-            // 실제 배포 시 사용되는 설정 (제공해주신 정보)
+            // 실제 배포 설정
             firebaseConfig = {
                 apiKey: "AIzaSyAy3Jhb4v_vVq3BPcPK8IboQbzFLkFXcis",
                 authDomain: "trading-checklist-ca373.firebaseapp.com",
@@ -134,7 +133,7 @@
                 messagingSenderId: "945835997130",
                 appId: "1:945835997130:web:1ba5bcaf658fc52cc74133"
             };
-            appId = 'trading-checklist-ca373'; // 개인 프로젝트 ID 사용
+            appId = 'trading-checklist-ca373';
         }
 
         const app = initializeApp(firebaseConfig);
@@ -149,6 +148,9 @@
         let saveTimeout;
         let currentUser = null; 
 
+        // 🔵 핵심 변경: 기기 고유 ID가 아닌 '고정된' ID를 사용하여 동기화 해결
+        const FIXED_SYNC_ID = "my_trading_journal_v1";
+
         // --- EXPOSE FUNCTIONS ---
         window.changeMonth = (delta) => {
             currentDate.setMonth(currentDate.getMonth() + delta);
@@ -159,7 +161,7 @@
             document.getElementById('checklist-view').classList.add('hidden');
             document.getElementById('calendar-view').classList.remove('hidden');
             document.getElementById('back-btn').classList.add('hidden');
-            document.getElementById('header-title').innerText = '☁️ 트레이딩 로그';
+            document.getElementById('header-title').innerText = '☁️ 트레이딩 로그 (동기화됨)';
             renderCalendar();
         };
 
@@ -169,7 +171,6 @@
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                     await signInWithCustomToken(auth, __initial_auth_token);
                 } else {
-                    // 익명 로그인: 별도 가입 없이 기기(브라우저)별 고유 ID로 접속
                     await signInAnonymously(auth);
                 }
             } catch (error) {
@@ -181,8 +182,7 @@
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 currentUser = user;
-                console.log("Connected as:", user.uid);
-                // 로그인 성공 시 로딩바 숨김 및 데이터 로드
+                console.log("Device Logged in. Syncing to Fixed ID.");
                 document.getElementById('sync-status').style.display = 'none';
                 loadDataForMonth(currentDate.getFullYear(), currentDate.getMonth());
             }
@@ -191,18 +191,18 @@
         initAuth();
 
         // --- FIRESTORE PATH HELPER ---
-        // 🔴 FIX: Path must be compliant with security rules
         function getDocRef(docId) {
-            if (!currentUser) return null;
-            
-            // Path structure: artifacts/{appId}/users/{userId}/logs/{docId}
-            // This structure is safe for both Canvas preview and personal projects (if rules allow or test mode is on)
-            return doc(db, 'artifacts', appId, 'users', currentUser.uid, 'logs', docId);
+            // 🔴 여기가 수정되었습니다! 
+            // currentUser.uid (기기별 ID) 대신 FIXED_SYNC_ID (고정 ID)를 사용합니다.
+            // 이제 어떤 기기에서 접속하든 'my_trading_journal_v1'이라는 같은 방을 씁니다.
+            return doc(db, 'artifacts', appId, 'users', FIXED_SYNC_ID, 'logs', docId);
         }
 
         // --- CORE LOGIC ---
         async function loadDataForMonth(year, month) {
-            if (!currentUser) return;
+            // Auth check is purely for security rules, we use fixed ID for data
+            if (!auth.currentUser) return; 
+
             const loader = document.getElementById('sync-status');
             loader.style.display = 'block';
             
@@ -214,7 +214,6 @@
                 localData = docSnap.exists() ? docSnap.data() : {};
             } catch (e) {
                 console.error("Load Error:", e);
-                // If permission denied or offline, default to empty
                 localData = {}; 
             } finally {
                 loader.style.display = 'none';
@@ -223,7 +222,7 @@
         }
 
         async function saveData() {
-            if (!currentUser || !selectedDateKey) return;
+            if (!auth.currentUser || !selectedDateKey) return;
             const loader = document.getElementById('sync-status');
             loader.style.display = 'block';
 
@@ -236,7 +235,6 @@
                 console.log("Saved.");
             } catch (e) {
                 console.error("Save Error:", e);
-                // alert("저장 실패: 권한이 없거나 인터넷 문제입니다.");
             } finally {
                 loader.style.display = 'none';
             }
